@@ -10,8 +10,8 @@ export const organizations: Record<string, Organization> = {
   fund: {
     id: 'fund',
     name: 'Фонд',
-    primaryColor: '#5601da',
-    accentColor: '#5601da',
+    primaryColor: '#4d008c',
+    accentColor: '#4d008c',
   },
   lyceum: {
     id: 'lyceum',

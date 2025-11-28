@@ -92,6 +92,7 @@ const translations: Translations = {
   errorCreatingEvent: { ru: 'Ошибка при создании мероприятия', en: 'Error creating event' },
   errorUpdatingEvent: { ru: 'Ошибка при обновлении мероприятия', en: 'Error updating event' },
   errorDeletingEvent: { ru: 'Ошибка при удалении мероприятия', en: 'Error deleting event' },
+  clickToSort: { ru: 'Нажмите для сортировки', en: 'Click to sort' },
 };
 
 // Функция для получения переведенной роли

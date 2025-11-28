@@ -1,6 +1,6 @@
-import { useState } from 'react';
+import { useState, useMemo } from 'react';
 import { Participant } from '../api/certificates';
-import { User, Mail, Award, Trophy, Edit2, Check, X, Trash2, ChevronLeft, ChevronRight } from 'lucide-react';
+import { User, Mail, Award, Trophy, Edit2, Check, X, Trash2, ChevronLeft, ChevronRight, ChevronUp, ChevronDown, ArrowUpDown } from 'lucide-react';
 import { useLanguage, translateRole } from '../contexts/LanguageContext';
 
 interface ParticipantsTableProps {
@@ -24,6 +24,8 @@ export const ParticipantsTable: React.FC<ParticipantsTableProps> = ({
   const [selectedIndices, setSelectedIndices] = useState<Set<number>>(new Set());
   const [selectAll, setSelectAll] = useState(false);
   const [currentPage, setCurrentPage] = useState(1);
+  const [sortField, setSortField] = useState<'fio' | 'role' | 'place' | null>(null);
+  const [sortDirection, setSortDirection] = useState<'asc' | 'desc'>('asc');
 
   if (participants.length === 0) {
     return (
@@ -47,15 +49,62 @@ export const ParticipantsTable: React.FC<ParticipantsTableProps> = ({
     призер: roleColors.призер,
   };
 
+  // Сортировка с сохранением оригинальных индексов
+  const sortedParticipantsWithIndices = useMemo(() => {
+    if (!sortField) {
+      return participants.map((p, index) => ({ participant: p, originalIndex: index }));
+    }
+
+    const withIndices = participants.map((p, index) => ({ participant: p, originalIndex: index }));
+    
+    const sorted = [...withIndices].sort((a, b) => {
+      let comparison = 0;
+
+      switch (sortField) {
+        case 'fio':
+          comparison = a.participant.fio.localeCompare(b.participant.fio, language === 'ru' ? 'ru' : 'en');
+          break;
+        case 'role':
+          const roleOrder: Record<Participant['role'], number> = {
+            участник: 1,
+            докладчик: 2,
+            призер: 3,
+            победитель: 4,
+          };
+          comparison = (roleOrder[a.participant.role] || 0) - (roleOrder[b.participant.role] || 0);
+          break;
+        case 'place':
+          const placeA = a.participant.place ?? 999; // Участники без места в конец
+          const placeB = b.participant.place ?? 999;
+          comparison = placeA - placeB;
+          break;
+      }
+
+      return sortDirection === 'asc' ? comparison : -comparison;
+    });
+
+    return sorted;
+  }, [participants, sortField, sortDirection, language]);
+
+  const sortedParticipants = sortedParticipantsWithIndices.map(item => item.participant);
+
+  const handleSort = (field: 'fio' | 'role' | 'place') => {
+    if (sortField === field) {
+      // Если уже сортируем по этому полю, меняем направление
+      setSortDirection(sortDirection === 'asc' ? 'desc' : 'asc');
+    } else {
+      // Если новое поле, начинаем с возрастания
+      setSortField(field);
+      setSortDirection('asc');
+    }
+    setCurrentPage(1); // Сбрасываем на первую страницу при сортировке
+  };
+
   // Пагинация
-  const totalPages = Math.ceil(participants.length / itemsPerPage);
+  const totalPages = Math.ceil(sortedParticipants.length / itemsPerPage);
   const startIndex = (currentPage - 1) * itemsPerPage;
   const endIndex = startIndex + itemsPerPage;
-  const currentParticipants = participants.slice(startIndex, endIndex);
-  const currentPageIndices = currentParticipants.map((_, i) => startIndex + i);
-
-  // Обновляем выбранные индексы при смене страницы
-  const getGlobalIndex = (localIndex: number) => startIndex + localIndex;
+  const currentParticipants = sortedParticipants.slice(startIndex, endIndex);
 
   const handleEdit = (globalIndex: number) => {
     setEditingIndex(globalIndex);
@@ -80,24 +129,32 @@ export const ParticipantsTable: React.FC<ParticipantsTableProps> = ({
       setSelectedIndices(new Set());
       setSelectAll(false);
     } else {
-      // Выбираем только участников на текущей странице
+      // Выбираем только участников на текущей странице (используем оригинальные индексы)
       const newSelected = new Set(selectedIndices);
-      currentPageIndices.forEach(i => newSelected.add(i));
+      currentParticipants.forEach((_, localIndex) => {
+        const sortedIndex = startIndex + localIndex;
+        const originalIndex = sortedParticipantsWithIndices[sortedIndex]?.originalIndex ?? sortedIndex;
+        newSelected.add(originalIndex);
+      });
       setSelectedIndices(newSelected);
       setSelectAll(newSelected.size === participants.length);
     }
   };
 
-  const handleSelect = (globalIndex: number) => {
+  const handleSelect = (originalIndex: number) => {
     const newSelected = new Set(selectedIndices);
-    if (newSelected.has(globalIndex)) {
-      newSelected.delete(globalIndex);
+    if (newSelected.has(originalIndex)) {
+      newSelected.delete(originalIndex);
     } else {
-      newSelected.add(globalIndex);
+      newSelected.add(originalIndex);
     }
     setSelectedIndices(newSelected);
-    // Проверяем, выбраны ли все на текущей странице
-    const allCurrentPageSelected = currentPageIndices.every(i => newSelected.has(i));
+    // Проверяем, выбраны ли все на текущей странице (используем оригинальные индексы)
+    const currentPageOriginalIndices = currentParticipants.map((_, localIndex) => {
+      const sortedIndex = startIndex + localIndex;
+      return sortedParticipantsWithIndices[sortedIndex]?.originalIndex ?? sortedIndex;
+    });
+    const allCurrentPageSelected = currentPageOriginalIndices.every(i => newSelected.has(i));
     setSelectAll(allCurrentPageSelected && newSelected.size === participants.length);
   };
 
@@ -149,17 +206,62 @@ export const ParticipantsTable: React.FC<ParticipantsTableProps> = ({
                   />
                 </th>
               )}
-              <th className="px-0 py-4 text-left text-xs font-light text-gray-600 dark:text-gray-400 uppercase tracking-wider">
-                {t('fio')}
+              <th 
+                className="px-0 py-4 text-left text-xs font-light text-gray-600 dark:text-gray-400 uppercase tracking-wider cursor-pointer hover:text-gray-950 dark:hover:text-white transition-colors group relative"
+                onClick={() => handleSort('fio')}
+                title={t('clickToSort')}
+              >
+                <div className="flex items-center space-x-2">
+                  <span>{t('fio')}</span>
+                  {sortField === 'fio' ? (
+                    sortDirection === 'asc' ? (
+                      <ChevronUp className="h-3.5 w-3.5 text-gray-950 dark:text-white" />
+                    ) : (
+                      <ChevronDown className="h-3.5 w-3.5 text-gray-950 dark:text-white" />
+                    )
+                  ) : (
+                    <ArrowUpDown className="h-3.5 w-3.5 opacity-30 group-hover:opacity-70 transition-opacity" />
+                  )}
+                </div>
               </th>
               <th className="px-0 py-4 text-left text-xs font-light text-gray-600 dark:text-gray-400 uppercase tracking-wider">
                 {t('email')}
               </th>
-              <th className="px-0 py-4 text-left text-xs font-light text-gray-600 dark:text-gray-400 uppercase tracking-wider">
-                {t('role')}
+              <th 
+                className="px-0 py-4 text-left text-xs font-light text-gray-600 dark:text-gray-400 uppercase tracking-wider cursor-pointer hover:text-gray-950 dark:hover:text-white transition-colors group relative"
+                onClick={() => handleSort('role')}
+                title={t('clickToSort')}
+              >
+                <div className="flex items-center space-x-2">
+                  <span>{t('role')}</span>
+                  {sortField === 'role' ? (
+                    sortDirection === 'asc' ? (
+                      <ChevronUp className="h-3.5 w-3.5 text-gray-950 dark:text-white" />
+                    ) : (
+                      <ChevronDown className="h-3.5 w-3.5 text-gray-950 dark:text-white" />
+                    )
+                  ) : (
+                    <ArrowUpDown className="h-3.5 w-3.5 opacity-30 group-hover:opacity-70 transition-opacity" />
+                  )}
+                </div>
               </th>
-              <th className="px-0 py-4 text-left text-xs font-light text-gray-600 dark:text-gray-400 uppercase tracking-wider">
-                {t('place')}
+              <th 
+                className="px-0 py-4 text-left text-xs font-light text-gray-600 dark:text-gray-400 uppercase tracking-wider cursor-pointer hover:text-gray-950 dark:hover:text-white transition-colors group relative"
+                onClick={() => handleSort('place')}
+                title={t('clickToSort')}
+              >
+                <div className="flex items-center space-x-2">
+                  <span>{t('place')}</span>
+                  {sortField === 'place' ? (
+                    sortDirection === 'asc' ? (
+                      <ChevronUp className="h-3.5 w-3.5 text-gray-950 dark:text-white" />
+                    ) : (
+                      <ChevronDown className="h-3.5 w-3.5 text-gray-950 dark:text-white" />
+                    )
+                  ) : (
+                    <ArrowUpDown className="h-3.5 w-3.5 opacity-30 group-hover:opacity-70 transition-opacity" />
+                  )}
+                </div>
               </th>
               <th className="px-0 py-4 text-right text-xs font-light text-gray-600 dark:text-gray-400 uppercase tracking-wider">
                 {t('actions')}
@@ -168,13 +270,14 @@ export const ParticipantsTable: React.FC<ParticipantsTableProps> = ({
           </thead>
           <tbody className="divide-y divide-gray-200 dark:divide-gray-700">
             {currentParticipants.map((participant, localIndex) => {
-              const globalIndex = getGlobalIndex(localIndex);
-              const isEditing = editingIndex === globalIndex;
-              const isSelected = selectedIndices.has(globalIndex);
+              const sortedIndex = startIndex + localIndex;
+              const originalIndex = sortedParticipantsWithIndices[sortedIndex]?.originalIndex ?? sortedIndex;
+              const isEditing = editingIndex === originalIndex;
+              const isSelected = selectedIndices.has(originalIndex);
 
               return (
                 <tr
-                  key={globalIndex}
+                  key={originalIndex}
                   className={`group hover:bg-gray-50/50 dark:hover:bg-gray-800/50 transition-colors ${
                     isSelected ? 'bg-accent/5' : ''
                   }`}
@@ -184,7 +287,7 @@ export const ParticipantsTable: React.FC<ParticipantsTableProps> = ({
                       <input
                         type="checkbox"
                         checked={isSelected}
-                        onChange={() => handleSelect(globalIndex)}
+                        onChange={() => handleSelect(originalIndex)}
                         className="h-4 w-4 text-accent focus:ring-accent border-gray-300 dark:border-gray-600 rounded"
                       />
                     </td>
@@ -262,7 +365,7 @@ export const ParticipantsTable: React.FC<ParticipantsTableProps> = ({
                     {isEditing ? (
                       <div className="flex items-center justify-end space-x-3">
                         <button
-                          onClick={() => handleSave(globalIndex)}
+                          onClick={() => handleSave(originalIndex)}
                           className="text-gray-500 hover:text-gray-700 dark:hover:text-gray-300 transition-colors"
                           title={t('save')}
                         >
@@ -280,7 +383,7 @@ export const ParticipantsTable: React.FC<ParticipantsTableProps> = ({
                       <div className="flex items-center justify-end space-x-3 opacity-0 group-hover:opacity-100 transition-opacity">
                         {onUpdate && (
                           <button
-                            onClick={() => handleEdit(globalIndex)}
+                            onClick={() => handleEdit(originalIndex)}
                             className="text-gray-500 hover:text-gray-700 dark:hover:text-gray-300 transition-colors"
                             title={t('edit')}
                           >
@@ -289,7 +392,7 @@ export const ParticipantsTable: React.FC<ParticipantsTableProps> = ({
                         )}
                         {onRemove && (
                           <button
-                            onClick={() => onRemove(globalIndex)}
+                            onClick={() => onRemove(originalIndex)}
                             className="text-gray-500 hover:text-gray-700 dark:hover:text-gray-300 transition-colors"
                             title={t('delete')}
                           >
@@ -310,7 +413,7 @@ export const ParticipantsTable: React.FC<ParticipantsTableProps> = ({
       {totalPages > 1 && (
         <div className="flex items-center justify-between border-t-2 border-gray-200 dark:border-gray-700 pt-6">
           <div className="text-sm text-gray-600 dark:text-gray-400 font-light">
-            {t('showing')} {startIndex + 1} - {Math.min(endIndex, participants.length)} {t('of')} {participants.length}
+            {t('showing')} {startIndex + 1} - {Math.min(endIndex, sortedParticipants.length)} {t('of')} {sortedParticipants.length}
           </div>
           <div className="flex items-center space-x-1">
             <button
