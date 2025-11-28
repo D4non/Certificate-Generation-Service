@@ -7,7 +7,7 @@ import { useLanguage } from '../contexts/LanguageContext';
 import { useOrganization } from '../contexts/OrganizationContext';
 
 export const EventsPage: React.FC = () => {
-  const { t } = useLanguage();
+  const { t, language } = useLanguage();
   const { organization } = useOrganization();
   const navigate = useNavigate();
   const orgColor = organization?.primaryColor || '#5500d8';
@@ -31,7 +31,7 @@ export const EventsPage: React.FC = () => {
       setEvents(data);
     } catch (error: any) {
       console.error('Ошибка при загрузке мероприятий:', error);
-      const errorMessage = error.response?.data?.detail || error.message || 'Ошибка при загрузке мероприятий';
+      const errorMessage = error.response?.data?.detail || error.message || t('errorLoadingEvents');
       toast.error(errorMessage);
     } finally {
       setLoading(false);
@@ -40,7 +40,7 @@ export const EventsPage: React.FC = () => {
 
   const handleCreateEvent = async () => {
     if (!eventName.trim()) {
-      toast.error('Введите название мероприятия');
+      toast.error(t('enterEventName'));
       return;
     }
 
@@ -54,17 +54,17 @@ export const EventsPage: React.FC = () => {
       setEventDescription('');
       // Перезагружаем список мероприятий с сервера
       await loadEvents();
-      toast.success('Мероприятие создано');
+      toast.success(t('eventCreated'));
     } catch (error: any) {
       console.error('Ошибка при создании мероприятия:', error);
-      const errorMessage = error.response?.data?.detail || error.message || 'Ошибка при создании мероприятия';
+      const errorMessage = error.response?.data?.detail || error.message || t('errorCreatingEvent');
       toast.error(errorMessage);
     }
   };
 
   const handleUpdateEvent = async () => {
     if (!editingEvent || !eventName.trim()) {
-      toast.error('Введите название мероприятия');
+      toast.error(t('enterEventName'));
       return;
     }
 
@@ -77,23 +77,23 @@ export const EventsPage: React.FC = () => {
       setEditingEvent(null);
       setEventName('');
       setEventDescription('');
-      toast.success('Мероприятие обновлено');
+      toast.success(t('eventUpdated'));
     } catch (error: any) {
-      toast.error('Ошибка при обновлении мероприятия');
+      toast.error(t('errorUpdatingEvent'));
     }
   };
 
   const handleDeleteEvent = async (eventId: string) => {
-    if (!confirm('Вы уверены, что хотите удалить это мероприятие?')) {
+    if (!confirm(t('confirmDelete'))) {
       return;
     }
 
     try {
       await eventsApi.delete(eventId);
       setEvents(events.filter(e => e.id !== eventId));
-      toast.success('Мероприятие удалено');
+      toast.success(t('eventDeleted'));
     } catch (error: any) {
-      toast.error('Ошибка при удалении мероприятия');
+      toast.error(t('errorDeletingEvent'));
     }
   };
 
@@ -110,7 +110,7 @@ export const EventsPage: React.FC = () => {
 
   const formatDate = (dateString: string) => {
     const date = new Date(dateString);
-    return date.toLocaleDateString('ru-RU', {
+    return date.toLocaleDateString(language === 'ru' ? 'ru-RU' : 'en-US', {
       year: 'numeric',
       month: 'long',
       day: 'numeric',
@@ -131,10 +131,10 @@ export const EventsPage: React.FC = () => {
       <section>
         <div className="mb-12">
           <h1 className="text-4xl font-light text-gray-950 dark:text-white tracking-tight mb-4">
-            Мероприятия
+            {t('events')}
           </h1>
           <p className="text-base text-gray-700 dark:text-gray-300 font-light leading-relaxed max-w-2xl">
-            Управляйте мероприятиями вашей организации. Для каждого мероприятия вы можете загружать участников, выбирать шаблоны и генерировать сертификаты.
+            {t('eventsDescription')}
           </p>
         </div>
 
@@ -153,7 +153,7 @@ export const EventsPage: React.FC = () => {
             }}
           >
             <Plus className="h-5 w-5 mr-2" />
-            Создать мероприятие
+            {t('createEvent')}
           </button>
         </div>
       </section>
@@ -164,10 +164,10 @@ export const EventsPage: React.FC = () => {
           <div className="text-center py-16">
             <Calendar className="h-16 w-16 text-gray-300 dark:text-gray-600 mx-auto mb-4" />
             <p className="text-lg text-gray-500 dark:text-gray-400 font-light">
-              Пока нет мероприятий
+              {t('noEvents')}
             </p>
             <p className="text-sm text-gray-400 dark:text-gray-500 font-light mt-2">
-              Создайте первое мероприятие, чтобы начать работу
+              {t('createFirstEvent')}
             </p>
           </div>
         ) : (
@@ -189,7 +189,7 @@ export const EventsPage: React.FC = () => {
                         handleEditEvent(event);
                       }}
                       className="p-2 text-gray-500 hover:text-gray-700 dark:hover:text-gray-300 transition-colors"
-                      title="Редактировать"
+                      title={t('edit')}
                     >
                       <Edit2 className="h-4 w-4" />
                     </button>
@@ -199,7 +199,7 @@ export const EventsPage: React.FC = () => {
                         handleDeleteEvent(event.id);
                       }}
                       className="p-2 text-gray-500 hover:text-red-600 dark:hover:text-red-400 transition-colors"
-                      title="Удалить"
+                      title={t('delete')}
                     >
                       <Trash2 className="h-4 w-4" />
                     </button>
@@ -228,7 +228,7 @@ export const EventsPage: React.FC = () => {
           <div className="bg-white dark:bg-gray-900 w-full max-w-2xl border-2 border-gray-200 dark:border-gray-700">
             <div className="p-6 border-b-2 border-gray-200 dark:border-gray-700 flex items-center justify-between">
               <h2 className="text-2xl font-light text-gray-950 dark:text-white">
-                {editingEvent ? 'Редактировать мероприятие' : 'Создать мероприятие'}
+                {editingEvent ? t('editEvent') : t('createEvent')}
               </h2>
               <button
                 onClick={() => {
@@ -246,28 +246,28 @@ export const EventsPage: React.FC = () => {
             <div className="p-6 space-y-6">
               <div>
                 <label className="block text-xs font-light text-gray-600 dark:text-gray-400 uppercase tracking-wider mb-3">
-                  Название мероприятия <span className="text-gray-500">*</span>
+                  {t('eventName')} <span className="text-gray-500">*</span>
                 </label>
                 <input
                   type="text"
                   value={eventName}
                   onChange={(e) => setEventName(e.target.value)}
                   className="w-full px-0 py-3 border-0 border-b-2 border-gray-300 dark:border-gray-600 bg-transparent text-gray-950 dark:text-white placeholder-gray-500 focus:outline-none focus:border-accent transition-colors text-base font-light"
-                  placeholder="Название мероприятия"
+                  placeholder={t('eventName')}
                   style={{ '--tw-focus-ring-color': orgColor } as React.CSSProperties}
                 />
               </div>
 
               <div>
                 <label className="block text-xs font-light text-gray-600 dark:text-gray-400 uppercase tracking-wider mb-3">
-                  Описание (необязательно)
+                  {t('eventDescription')}
                 </label>
                 <textarea
                   value={eventDescription}
                   onChange={(e) => setEventDescription(e.target.value)}
                   rows={4}
                   className="w-full px-0 py-3 border-0 border-b-2 border-gray-300 dark:border-gray-600 bg-transparent text-gray-950 dark:text-white placeholder-gray-500 focus:outline-none focus:border-accent transition-colors text-base font-light resize-none"
-                  placeholder="Описание мероприятия"
+                  placeholder={t('eventDescriptionPlaceholder')}
                   style={{ '--tw-focus-ring-color': orgColor } as React.CSSProperties}
                 />
               </div>
@@ -286,7 +286,7 @@ export const EventsPage: React.FC = () => {
                     color: orgColor,
                   }}
                 >
-                  Отменить
+                  {t('cancel')}
                 </button>
                 <button
                   onClick={editingEvent ? handleUpdateEvent : handleCreateEvent}
@@ -297,7 +297,7 @@ export const EventsPage: React.FC = () => {
                   }}
                 >
                   <Check className="h-5 w-5 mr-2" />
-                  {editingEvent ? 'Сохранить' : 'Создать'}
+                  {editingEvent ? t('save') : t('create')}
                 </button>
               </div>
             </div>
