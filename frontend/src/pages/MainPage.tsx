@@ -117,8 +117,8 @@ const AddParticipantForm: React.FC<{
         <div className="flex items-center space-x-3 pt-4">
           <button
             type="submit"
-            className="px-6 py-4 text-white dark:text-gray-950 text-base font-light hover:opacity-90 dark:hover:bg-gray-100 focus:outline-none transition-all"
-            style={{ backgroundColor: orgColor }}
+            className="px-6 py-4 text-base font-light hover:opacity-90 focus:outline-none transition-all"
+            style={{ backgroundColor: orgColor, color: '#fff' }}
           >
             {t('add')}
           </button>
@@ -522,8 +522,8 @@ export const MainPage: React.FC = () => {
           />
           <button
             onClick={handleUploadClick}
-            className="flex items-center px-6 py-4 text-white dark:text-gray-950 text-base font-light hover:opacity-90 dark:hover:bg-gray-100 focus:outline-none transition-all"
-            style={{ backgroundColor: orgColor }}
+            className="flex items-center px-6 py-4 text-base font-light hover:opacity-90 focus:outline-none transition-all"
+            style={{ backgroundColor: orgColor, color: '#fff' }}
           >
             <Upload className="h-5 w-5 mr-2" />
             {t('uploadFile')}
@@ -589,8 +589,8 @@ export const MainPage: React.FC = () => {
               setEditingTemplate(null);
               setTemplateModalOpen(true);
             }}
-            className="flex items-center px-6 py-4 text-white dark:text-gray-950 text-base font-light hover:opacity-90 dark:hover:bg-gray-100 focus:outline-none transition-all"
-            style={{ backgroundColor: orgColor }}
+            className="flex items-center px-6 py-4 text-base font-light hover:opacity-90 focus:outline-none transition-all"
+            style={{ backgroundColor: orgColor, color: '#fff' }}
           >
             <Plus className="h-5 w-5 mr-2" />
             Новый шаблон
@@ -807,8 +807,8 @@ export const MainPage: React.FC = () => {
             <button
               onClick={handleGenerate}
               disabled={generating || !selectedTemplate || participants.length === 0}
-              className="w-full flex items-center justify-center px-8 py-6 text-white dark:text-gray-950 text-lg font-light hover:opacity-90 dark:hover:bg-gray-100 focus:outline-none disabled:opacity-30 disabled:cursor-not-allowed transition-all"
-              style={{ backgroundColor: orgColor }}
+              className="w-full flex items-center justify-center px-8 py-6 text-lg font-light hover:opacity-90 focus:outline-none disabled:opacity-30 disabled:cursor-not-allowed transition-all"
+              style={{ backgroundColor: orgColor, color: '#fff' }}
             >
               {generating ? (
                 <>
