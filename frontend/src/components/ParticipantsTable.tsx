@@ -3,12 +3,18 @@ import { Participant } from '../api/certificates';
 import { User, Mail, Award, Trophy, Edit2, Check, X, Trash2, ChevronLeft, ChevronRight, ChevronUp, ChevronDown, ArrowUpDown } from 'lucide-react';
 import { useLanguage, translateRole } from '../contexts/LanguageContext';
 
+interface EventRole {
+  name: string;
+  color: string;
+}
+
 interface ParticipantsTableProps {
   participants: Participant[];
   onRemove?: (index: number) => void;
   onUpdate?: (index: number, participant: Participant) => void;
   onRemoveMultiple?: (indices: number[]) => void;
   itemsPerPage?: number;
+  eventRoles?: EventRole[];
 }
 
 export const ParticipantsTable: React.FC<ParticipantsTableProps> = ({
@@ -17,6 +23,7 @@ export const ParticipantsTable: React.FC<ParticipantsTableProps> = ({
   onUpdate,
   onRemoveMultiple,
   itemsPerPage = 10,
+  eventRoles,
 }) => {
   const { t, language } = useLanguage();
   const [editingIndex, setEditingIndex] = useState<number | null>(null);
@@ -327,27 +334,54 @@ export const ParticipantsTable: React.FC<ParticipantsTableProps> = ({
                         onChange={(e) => setEditData({ ...editData, role: e.target.value as Participant['role'] })}
                         className="w-full px-0 py-1 text-base border-0 border-b-2 border-gray-300 dark:border-gray-600 bg-transparent text-gray-950 dark:text-white focus:outline-none focus:border-accent transition-colors font-light"
                       >
-                        <option value="участник">{translateRole('участник', language)}</option>
-                        <option value="докладчик">{translateRole('докладчик', language)}</option>
-                        <option value="победитель">{translateRole('победитель', language)}</option>
-                        <option value="призер">{translateRole('призер', language)}</option>
+                        {eventRoles && eventRoles.length > 0 ? (
+                          eventRoles.map((role) => (
+                            <option key={role.name} value={role.name}>
+                              {role.name}
+                            </option>
+                          ))
+                        ) : (
+                          <>
+                            <option value="участник">{translateRole('участник', language)}</option>
+                            <option value="докладчик">{translateRole('докладчик', language)}</option>
+                            <option value="победитель">{translateRole('победитель', language)}</option>
+                            <option value="призер">{translateRole('призер', language)}</option>
+                          </>
+                        )}
                       </select>
-                    ) : (
-                      <span
-                        className={`inline-flex px-3 py-1 text-xs font-light border ${roleStyles[participant.role]}`}
-                      >
-                        {translateRole(participant.role, language)}
-                      </span>
-                    )}
+                    ) : (() => {
+                      const roleColor = eventRoles?.find(r => r.name.toLowerCase() === participant.role.toLowerCase())?.color;
+                      return (
+                        <span
+                          className={roleColor ? "inline-flex px-3 py-1 text-xs font-light border rounded-full" : `inline-flex px-3 py-1 text-xs font-light border rounded-full ${roleStyles[participant.role] || roleStyles['участник']}`}
+                          style={roleColor ? {
+                            backgroundColor: `${roleColor}20`,
+                            borderColor: roleColor,
+                            color: roleColor,
+                          } : undefined}
+                        >
+                          {translateRole(participant.role, language)}
+                        </span>
+                      );
+                    })()}
                   </td>
                   <td className="px-0 py-5 whitespace-nowrap align-top">
                     {isEditing && editData ? (
                       <input
                         type="number"
                         min="1"
-                        max="3"
                         value={editData.place || ''}
-                        onChange={(e) => setEditData({ ...editData, place: e.target.value ? parseInt(e.target.value) : undefined })}
+                        onChange={(e) => {
+                          const value = e.target.value;
+                          if (value === '') {
+                            setEditData({ ...editData, place: undefined });
+                          } else {
+                            const numValue = parseInt(value);
+                            if (!isNaN(numValue) && numValue > 0) {
+                              setEditData({ ...editData, place: numValue });
+                            }
+                          }
+                        }}
                         className="w-20 px-0 py-1 text-base border-0 border-b-2 border-gray-300 dark:border-gray-600 bg-transparent text-gray-950 dark:text-white focus:outline-none focus:border-accent transition-colors font-light"
                         placeholder="—"
                       />

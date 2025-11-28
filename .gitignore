@@ -66,4 +66,5 @@ backend/uploads/templates/*
 *.db
 *.sqlite
 *.sqlite3
+events_db.json
 

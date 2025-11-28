@@ -1,21 +1,29 @@
 import apiClient from './client';
 
+export interface EventRole {
+  name: string;
+  color: string;
+}
+
 export interface Event {
   id: string;
   name: string;
   organization_id: string;
   created_at: string;
   description?: string;
+  roles?: EventRole[];
 }
 
 export interface EventCreate {
   name: string;
   description?: string;
+  roles?: string[];
 }
 
 export interface EventUpdate {
   name?: string;
   description?: string;
+  roles?: string[];
 }
 
 export const eventsApi = {

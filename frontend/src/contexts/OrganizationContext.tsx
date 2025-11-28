@@ -15,7 +15,7 @@ export const OrganizationProvider: React.FC<{ children: React.ReactNode }> = ({ 
 
   useEffect(() => {
     // Загружаем организацию из localStorage или из AuthContext
-    const orgId = organizationId || localStorage.getItem('organization') || 'fund';
+    const orgId = organizationId || localStorage.getItem('organization') || 'foundation';
     const org = getOrganizationById(orgId);
     if (org) {
       setOrganization(org);

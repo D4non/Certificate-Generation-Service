@@ -5,7 +5,7 @@ import { eventsApi, Event } from '../api/events';
 import { ParticipantsTable } from '../components/ParticipantsTable';
 import { TemplateModal } from '../components/TemplateModal';
 import apiClient from '../api/client';
-import { Download, Loader2, CheckCircle2, Trash2, Plus, X, Edit2, Upload, UserPlus, ArrowLeft } from 'lucide-react';
+import { Download, Loader2, CheckCircle2, Trash2, Plus, X, Edit2, Upload, UserPlus, ArrowLeft, Check } from 'lucide-react';
 import toast from 'react-hot-toast';
 import { useLanguage, translateRole } from '../contexts/LanguageContext';
 import { useOrganization } from '../contexts/OrganizationContext';
@@ -15,7 +15,8 @@ import * as XLSX from 'xlsx';
 const AddParticipantForm: React.FC<{ 
   onAdd: (participant: Participant) => void;
   onCancel?: () => void;
-}> = ({ onAdd, onCancel }) => {
+  eventRoles?: Array<{ name: string; color: string }>;
+}> = ({ onAdd, onCancel, eventRoles }) => {
   const { t, language } = useLanguage();
   const { organization } = useOrganization();
   const orgColor = organization?.primaryColor || '#5500d8';
@@ -25,6 +26,16 @@ const AddParticipantForm: React.FC<{
     role: 'участник',
     place: undefined,
   });
+
+  // Обновляем роль при изменении eventRoles
+  useEffect(() => {
+    if (eventRoles && eventRoles.length > 0) {
+      setFormData(prev => ({
+        ...prev,
+        role: eventRoles[0].name as Participant['role'],
+      }));
+    }
+  }, [eventRoles]);
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
@@ -36,7 +47,7 @@ const AddParticipantForm: React.FC<{
     setFormData({
       fio: '',
       email: '',
-      role: 'участник',
+      role: (eventRoles && eventRoles.length > 0 ? eventRoles[0].name : 'участник') as Participant['role'],
       place: undefined,
     });
   };
@@ -88,16 +99,30 @@ const AddParticipantForm: React.FC<{
             <label className="block text-xs font-light text-gray-600 dark:text-gray-400 uppercase tracking-wider mb-3">
               {t('role')}
             </label>
-            <select
-              value={formData.role}
-              onChange={(e) => setFormData({ ...formData, role: e.target.value as Participant['role'] })}
-              className="w-full px-0 py-3 border-0 border-b-2 border-gray-300 dark:border-gray-600 bg-transparent text-gray-950 dark:text-white focus:outline-none focus:border-accent transition-colors text-base font-light"
-            >
-              <option value="участник">{translateRole('участник', language)}</option>
-              <option value="докладчик">{translateRole('докладчик', language)}</option>
-              <option value="победитель">{translateRole('победитель', language)}</option>
-              <option value="призер">{translateRole('призер', language)}</option>
-            </select>
+            {eventRoles && eventRoles.length > 0 ? (
+              <select
+                value={formData.role}
+                onChange={(e) => setFormData({ ...formData, role: e.target.value as Participant['role'] })}
+                className="w-full px-0 py-3 border-0 border-b-2 border-gray-300 dark:border-gray-600 bg-transparent text-gray-950 dark:text-white focus:outline-none focus:border-accent transition-colors text-base font-light"
+              >
+                {eventRoles.map((role) => (
+                  <option key={role.name} value={role.name}>
+                    {role.name}
+                  </option>
+                ))}
+              </select>
+            ) : (
+              <select
+                value={formData.role}
+                onChange={(e) => setFormData({ ...formData, role: e.target.value as Participant['role'] })}
+                className="w-full px-0 py-3 border-0 border-b-2 border-gray-300 dark:border-gray-600 bg-transparent text-gray-950 dark:text-white focus:outline-none focus:border-accent transition-colors text-base font-light"
+              >
+                <option value="участник">{translateRole('участник', language)}</option>
+                <option value="докладчик">{translateRole('докладчик', language)}</option>
+                <option value="победитель">{translateRole('победитель', language)}</option>
+                <option value="призер">{translateRole('призер', language)}</option>
+              </select>
+            )}
           </div>
           <div>
             <label className="block text-xs font-light text-gray-600 dark:text-gray-400 uppercase tracking-wider mb-3">
@@ -106,9 +131,18 @@ const AddParticipantForm: React.FC<{
             <input
               type="number"
               min="1"
-              max="3"
               value={formData.place || ''}
-              onChange={(e) => setFormData({ ...formData, place: e.target.value ? parseInt(e.target.value) : undefined })}
+              onChange={(e) => {
+                const value = e.target.value;
+                if (value === '') {
+                  setFormData({ ...formData, place: undefined });
+                } else {
+                  const numValue = parseInt(value);
+                  if (!isNaN(numValue) && numValue > 0) {
+                    setFormData({ ...formData, place: numValue });
+                  }
+                }
+              }}
               className="w-full px-0 py-3 border-0 border-b-2 border-gray-300 dark:border-gray-600 bg-transparent text-gray-950 dark:text-white focus:outline-none focus:border-accent transition-colors text-base font-light"
               placeholder="—"
             />
@@ -161,6 +195,11 @@ export const MainPage: React.FC = () => {
   const [generating, setGenerating] = useState(false);
   const [generated, setGenerated] = useState(false);
   const [zipUrl, setZipUrl] = useState<string | null>(null);
+  const [showEditEventModal, setShowEditEventModal] = useState(false);
+  const [editEventName, setEditEventName] = useState('');
+  const [editEventDescription, setEditEventDescription] = useState('');
+  const [editEventRoles, setEditEventRoles] = useState<string[]>([]);
+  const [newRoleName, setNewRoleName] = useState('');
 
   useEffect(() => {
     if (eventId) {
@@ -175,7 +214,6 @@ export const MainPage: React.FC = () => {
 
   const loadTemplates = async () => {
     try {
-      setLoading(true);
       const data = await certificatesApi.getTemplates();
       setTemplates(data);
       if (data.length > 0) {
@@ -189,19 +227,60 @@ export const MainPage: React.FC = () => {
       }
     } catch (error: any) {
       toast.error('Ошибка при загрузке шаблонов');
-    } finally {
-      setLoading(false);
     }
   };
 
   const loadEvent = async () => {
     if (!eventId) return;
     try {
+      setLoading(true);
       const eventData = await eventsApi.getById(eventId);
       setEvent(eventData);
     } catch (error: any) {
       toast.error('Ошибка при загрузке мероприятия');
       navigate('/');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleEditEvent = () => {
+    if (!event) return;
+    setEditEventName(event.name);
+    setEditEventDescription(event.description || '');
+    setEditEventRoles(event.roles ? event.roles.map(r => r.name) : []);
+    setNewRoleName('');
+    setShowEditEventModal(true);
+  };
+
+  const handleUpdateEvent = async () => {
+    if (!event || !editEventName.trim()) {
+      toast.error('Введите название мероприятия');
+      return;
+    }
+
+    if (editEventRoles.length === 0) {
+      toast.error('Необходимо добавить хотя бы одну роль для мероприятия');
+      return;
+    }
+
+    try {
+      const updated = await eventsApi.update(event.id, {
+        name: editEventName,
+        description: editEventDescription || undefined,
+        roles: editEventRoles.length > 0 ? editEventRoles : [],
+      });
+      setEvent(updated);
+      setShowEditEventModal(false);
+      setEditEventName('');
+      setEditEventDescription('');
+      setEditEventRoles([]);
+      setNewRoleName('');
+      toast.success('Мероприятие обновлено');
+    } catch (error: any) {
+      console.error('Ошибка при обновлении мероприятия:', error);
+      const errorMessage = error.response?.data?.detail || error.message || 'Ошибка при обновлении мероприятия';
+      toast.error(errorMessage);
     }
   };
 
@@ -219,8 +298,47 @@ export const MainPage: React.FC = () => {
 
   const handleFileParsed = (parsedParticipants: Participant[]) => {
     if (!eventId) return;
-    setParticipants(parsedParticipants);
-    localStorage.setItem(`participants_${eventId}`, JSON.stringify(parsedParticipants));
+    
+    // Фильтруем участников по ролям мероприятия
+    let filteredParticipants = parsedParticipants;
+    if (event && event.roles && event.roles.length > 0) {
+      const allowedRoles = event.roles.map(r => r.name.toLowerCase());
+      filteredParticipants = parsedParticipants.filter(p => 
+        allowedRoles.includes(p.role.toLowerCase())
+      );
+      
+      const filteredCount = parsedParticipants.length - filteredParticipants.length;
+      if (filteredCount > 0) {
+        toast(`Отфильтровано ${filteredCount} участников с ролями, не входящими в мероприятие`, {
+          icon: '⚠️',
+          duration: 4000,
+        });
+      }
+    }
+    
+    // Добавляем новых участников к существующим (объединяем списки)
+    // Используем комбинацию email и fio для проверки дубликатов
+    const existingParticipants = participants;
+    const existingKeys = new Set(
+      existingParticipants.map(p => `${p.email.toLowerCase()}_${p.fio.toLowerCase()}`)
+    );
+    
+    const newParticipants = filteredParticipants.filter(
+      p => !existingKeys.has(`${p.email.toLowerCase()}_${p.fio.toLowerCase()}`)
+    );
+    
+    const allParticipants = [...existingParticipants, ...newParticipants];
+    
+    if (newParticipants.length > 0) {
+      toast.success(`Добавлено ${newParticipants.length} новых участников`);
+    } else if (filteredParticipants.length > 0) {
+      toast(`Все участники из файла уже существуют в списке`);
+    } else {
+      toast.success(`Загружено ${parsedParticipants.length} участников`);
+    }
+    
+    setParticipants(allParticipants);
+    localStorage.setItem(`participants_${eventId}`, JSON.stringify(allParticipants));
   };
 
   const parseFile = async (file: File) => {
@@ -278,7 +396,6 @@ export const MainPage: React.FC = () => {
           }
         }
         handleFileParsed(participants);
-        toast.success(`Загружено ${participants.length} участников`);
       } else {
         throw new Error('Неподдерживаемый формат файла. Используйте CSV или XLSX');
       }
@@ -467,17 +584,31 @@ export const MainPage: React.FC = () => {
   }
 
   return (
+    <>
     <div className="space-y-24 pb-24">
       {/* Заголовок мероприятия */}
       <section>
         <div className="mb-8">
-          <button
-            onClick={() => navigate('/')}
-            className="flex items-center text-gray-600 dark:text-gray-400 hover:text-gray-950 dark:hover:text-white transition-colors mb-4"
-          >
-            <ArrowLeft className="h-4 w-4 mr-2" />
-            Вернуться к мероприятиям
-          </button>
+          <div className="flex items-center justify-between mb-4">
+            <button
+              onClick={() => navigate('/')}
+              className="flex items-center text-gray-600 dark:text-gray-400 hover:text-gray-950 dark:hover:text-white transition-colors"
+            >
+              <ArrowLeft className="h-4 w-4 mr-2" />
+              Вернуться к мероприятиям
+            </button>
+            <button
+              onClick={handleEditEvent}
+              className="flex items-center px-4 py-2 border-2 border-gray-300 dark:border-gray-600 text-sm font-light text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-800 focus:outline-none transition-all"
+              style={{
+                borderColor: orgColor,
+                color: orgColor,
+              }}
+            >
+              <Edit2 className="h-4 w-4 mr-2" />
+              Редактировать мероприятие
+            </button>
+          </div>
           <h1 className="text-4xl font-light text-gray-950 dark:text-white tracking-tight mb-2">
             {event.name}
           </h1>
@@ -552,6 +683,7 @@ export const MainPage: React.FC = () => {
                 setShowAddForm(false);
               }}
               onCancel={() => setShowAddForm(false)}
+              eventRoles={event?.roles}
             />
           </div>
         )}
@@ -566,6 +698,7 @@ export const MainPage: React.FC = () => {
               onRemove={handleRemoveParticipant}
               onUpdate={handleUpdateParticipant}
               onRemoveMultiple={handleRemoveMultipleParticipants}
+              eventRoles={event?.roles}
             />
           </div>
         )}
@@ -844,6 +977,177 @@ export const MainPage: React.FC = () => {
           )}
         </div>
       </section>
+
     </div>
+
+    {/* Модальное окно редактирования мероприятия - вне основного контейнера для полного затемнения */}
+    {showEditEventModal && (
+      <div 
+        className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50 backdrop-blur-sm" 
+        style={{ 
+          position: 'fixed', 
+          top: 0, 
+          left: 0, 
+          right: 0, 
+          bottom: 0, 
+          width: '100vw', 
+          height: '100vh',
+          margin: 0,
+          padding: '1rem'
+        }}
+      >
+        <div className="bg-white dark:bg-gray-900 w-full max-w-2xl border-2 border-gray-200 dark:border-gray-700 max-h-[95vh] overflow-y-auto">
+          <div className="p-6 border-b-2 border-gray-200 dark:border-gray-700 flex items-center justify-between">
+            <h2 className="text-2xl font-light text-gray-950 dark:text-white">
+              Редактировать мероприятие
+            </h2>
+            <button
+              onClick={() => {
+                setShowEditEventModal(false);
+                setEditEventName('');
+                setEditEventDescription('');
+                setEditEventRoles([]);
+                setNewRoleName('');
+              }}
+              className="text-gray-500 hover:text-gray-700 dark:hover:text-gray-300 transition-colors"
+            >
+              <X className="h-5 w-5" />
+            </button>
+          </div>
+
+          <div className="p-6 space-y-6">
+            <div>
+              <label className="block text-xs font-light text-gray-600 dark:text-gray-400 uppercase tracking-wider mb-3">
+                {t('eventName')} <span className="text-gray-500">*</span>
+              </label>
+              <input
+                type="text"
+                value={editEventName}
+                onChange={(e) => setEditEventName(e.target.value)}
+                className="w-full px-0 py-3 border-0 border-b-2 border-gray-300 dark:border-gray-600 bg-transparent text-gray-950 dark:text-white placeholder-gray-500 focus:outline-none focus:border-accent transition-colors text-base font-light"
+                placeholder={t('eventName')}
+                style={{ '--tw-focus-ring-color': orgColor } as React.CSSProperties}
+              />
+            </div>
+
+            <div>
+              <label className="block text-xs font-light text-gray-600 dark:text-gray-400 uppercase tracking-wider mb-3">
+                {t('eventDescription')}
+              </label>
+              <textarea
+                value={editEventDescription}
+                onChange={(e) => setEditEventDescription(e.target.value)}
+                rows={4}
+                className="w-full px-0 py-3 border-0 border-b-2 border-gray-300 dark:border-gray-600 bg-transparent text-gray-950 dark:text-white placeholder-gray-500 focus:outline-none focus:border-accent transition-colors text-base font-light resize-none"
+                placeholder={t('eventDescription')}
+                style={{ '--tw-focus-ring-color': orgColor } as React.CSSProperties}
+              />
+            </div>
+
+            {/* Управление ролями */}
+            <div>
+              <label className="block text-xs font-light text-gray-600 dark:text-gray-400 uppercase tracking-wider mb-3">
+                Роли мероприятия
+              </label>
+              <div className="space-y-3">
+                {/* Список существующих ролей */}
+                {editEventRoles.length > 0 && (
+                  <div className="flex flex-wrap gap-2 mb-3">
+                    {editEventRoles.map((role, index) => (
+                      <div
+                        key={index}
+                        className="flex items-center px-3 py-1.5 rounded-full text-sm font-light border-2"
+                        style={{
+                          borderColor: event?.roles?.find(r => r.name === role)?.color || orgColor,
+                          backgroundColor: event?.roles?.find(r => r.name === role)?.color ? `${event.roles.find(r => r.name === role)?.color}20` : 'transparent',
+                          color: event?.roles?.find(r => r.name === role)?.color || orgColor,
+                        }}
+                      >
+                        <span>{role}</span>
+                        <button
+                          onClick={() => {
+                            setEditEventRoles(editEventRoles.filter((_, i) => i !== index));
+                          }}
+                          className="ml-2 hover:opacity-70 transition-opacity"
+                        >
+                          <X className="h-3 w-3" />
+                        </button>
+                      </div>
+                    ))}
+                  </div>
+                )}
+                
+                {/* Добавление новой роли */}
+                <div className="flex items-center space-x-2">
+                  <input
+                    type="text"
+                    value={newRoleName}
+                    onChange={(e) => setNewRoleName(e.target.value)}
+                    onKeyPress={(e) => {
+                      if (e.key === 'Enter' && newRoleName.trim()) {
+                        if (!editEventRoles.includes(newRoleName.trim())) {
+                          setEditEventRoles([...editEventRoles, newRoleName.trim()]);
+                          setNewRoleName('');
+                        }
+                      }
+                    }}
+                    className="flex-1 px-0 py-2 border-0 border-b-2 border-gray-300 dark:border-gray-600 bg-transparent text-gray-950 dark:text-white placeholder-gray-500 focus:outline-none focus:border-accent transition-colors text-base font-light"
+                    placeholder="Введите название роли и нажмите Enter"
+                    style={{ '--tw-focus-ring-color': orgColor } as React.CSSProperties}
+                  />
+                  <button
+                    onClick={() => {
+                      if (newRoleName.trim() && !editEventRoles.includes(newRoleName.trim())) {
+                        setEditEventRoles([...editEventRoles, newRoleName.trim()]);
+                        setNewRoleName('');
+                      }
+                    }}
+                    className="px-4 py-2 border-2 text-sm font-light focus:outline-none transition-all flex items-center"
+                    style={{
+                      borderColor: orgColor,
+                      color: orgColor,
+                    }}
+                  >
+                    <Plus className="h-4 w-4 mr-1" />
+                    Добавить
+                  </button>
+                </div>
+              </div>
+            </div>
+
+            <div className="flex items-center justify-end space-x-4 pt-6 border-t-2 border-gray-200 dark:border-gray-700">
+              <button
+                onClick={() => {
+                  setShowEditEventModal(false);
+                  setEditEventName('');
+                  setEditEventDescription('');
+                  setEditEventRoles([]);
+                  setNewRoleName('');
+                }}
+                className="px-6 py-3 border-2 border-gray-300 dark:border-gray-600 text-base font-light text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-800 focus:outline-none transition-all"
+                style={{
+                  borderColor: orgColor,
+                  color: orgColor,
+                }}
+              >
+                {t('cancel')}
+              </button>
+              <button
+                onClick={handleUpdateEvent}
+                className="px-6 py-3 text-base font-light focus:outline-none transition-all flex items-center"
+                style={{
+                  backgroundColor: orgColor,
+                  color: '#fff',
+                }}
+              >
+                <Check className="h-5 w-5 mr-2" />
+                {t('save')}
+              </button>
+            </div>
+          </div>
+        </div>
+      </div>
+    )}
+    </>
   );
 };

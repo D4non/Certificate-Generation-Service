@@ -26,6 +26,8 @@ from email.mime.multipart import MIMEMultipart
 from email.mime.base import MIMEBase
 from email import encoders
 import logging
+import json
+import random
 
 app = FastAPI(title="Certificate Generation Service API")
 
@@ -46,11 +48,11 @@ app.add_middleware(
 
 # Простая база данных в памяти (для демо)
 users_db = {
-    "fund": {
-        "username": "fund",
-        "password": "fund123",
+    "foundation": {
+        "username": "foundation",
+        "password": "foundation123",
         "disabled": False,
-        "organization": "fund",
+        "organization": "foundation",
     },
     "lyceum": {
         "username": "lyceum",
@@ -81,19 +83,44 @@ users_db = {
         "username": "admin",
         "password": "admin123",
         "disabled": False,
-        "organization": "fund",
+        "organization": "foundation",
     },
     "user": {
         "username": "user",
         "password": "user123",
         "disabled": False,
-        "organization": "fund",
+        "organization": "foundation",
     }
 }
 
 templates_db: List[dict] = []
 certificates_db: List[dict] = []
-events_db: List[dict] = []  # Хранилище мероприятий
+# Файл для хранения мероприятий
+EVENTS_DB_FILE = Path("events_db.json")
+
+# Функция загрузки мероприятий из файла
+def load_events_db() -> List[dict]:
+    """Загружает мероприятия из файла"""
+    if EVENTS_DB_FILE.exists():
+        try:
+            with open(EVENTS_DB_FILE, 'r', encoding='utf-8') as f:
+                return json.load(f)
+        except Exception as e:
+            print(f"Error loading events_db: {e}")
+            return []
+    return []
+
+# Функция сохранения мероприятий в файл
+def save_events_db(events: List[dict]):
+    """Сохраняет мероприятия в файл"""
+    try:
+        with open(EVENTS_DB_FILE, 'w', encoding='utf-8') as f:
+            json.dump(events, f, ensure_ascii=False, indent=2)
+    except Exception as e:
+        print(f"Error saving events_db: {e}")
+
+# Загружаем мероприятия при запуске
+events_db: List[dict] = load_events_db()  # Хранилище мероприятий
 
 # Создаем папки для хранения файлов
 UPLOAD_DIR = Path("uploads")
@@ -174,20 +201,27 @@ class CertificateTemplate(BaseModel):
     file_url: Optional[str] = None
     preview_url: Optional[str] = None
 
+class EventRole(BaseModel):
+    name: str
+    color: str
+
 class Event(BaseModel):
     id: str
     name: str
     organization_id: str
     created_at: str
     description: Optional[str] = None
+    roles: Optional[List[EventRole]] = []
 
 class EventCreate(BaseModel):
     name: str
     description: Optional[str] = None
+    roles: Optional[List[str]] = []
 
 class EventUpdate(BaseModel):
     name: Optional[str] = None
     description: Optional[str] = None
+    roles: Optional[List[str]] = None
 
 class CertificateGenerationRequest(BaseModel):
     template_id: str
@@ -197,6 +231,17 @@ class CertificateGenerationRequest(BaseModel):
     send_email: Optional[bool] = False
     email_subject: Optional[str] = None
     email_body: Optional[str] = None
+
+# Функция генерации случайного цвета для роли
+def generate_random_color() -> str:
+    """Генерирует случайный цвет в формате HEX"""
+    colors = [
+        "#FF6B6B", "#4ECDC4", "#45B7D1", "#FFA07A", "#98D8C8",
+        "#F7DC6F", "#BB8FCE", "#85C1E2", "#F8B739", "#52BE80",
+        "#E74C3C", "#3498DB", "#9B59B6", "#1ABC9C", "#F39C12",
+        "#E67E22", "#34495E", "#16A085", "#27AE60", "#2980B9"
+    ]
+    return random.choice(colors)
 
 # Функция проверки пользователя
 def verify_user(username: str, password: str):
@@ -214,13 +259,11 @@ async def get_current_user(token: str = Depends(oauth2_scheme)):
             username = token.replace("mock_token_", "")
             user = users_db.get(username)
             if user:
-                return {"username": username, "organization": user.get("organization", "fund")}
-        # Fallback для совместимости
-        return {"username": "admin", "organization": "fund"}
+                return {"username": username, "organization": user.get("organization", "foundation")}
     except Exception as e:
         print(f"Error in get_current_user: {e}")
-        # Fallback для совместимости
-        return {"username": "admin", "organization": "fund"}
+    # Fallback для совместимости
+    return {"username": "admin", "organization": "foundation"}
 
 # ========== АВТОРИЗАЦИЯ ==========
 @app.post("/api/auth/login")
@@ -234,12 +277,12 @@ async def login(form_data: OAuth2PasswordRequestForm = Depends()):
             detail="Неверное имя пользователя или пароль",
             headers={"WWW-Authenticate": "Bearer"},
         )
-    print(f"Login successful: username={user['username']}, organization={user.get('organization', 'fund')}")
+    print(f"Login successful: username={user['username']}, organization={user.get('organization', 'foundation')}")
     # В реальном приложении здесь должен быть JWT токен
     return {
         "access_token": f"mock_token_{user['username']}",
         "token_type": "bearer",
-        "organization": user.get("organization", "fund")
+        "organization": user.get("organization", "foundation")
     }
 
 # ========== ШАБЛОНЫ ==========
@@ -333,18 +376,34 @@ async def create_event(
         
         username = current_user.get("username", "admin")
         user = users_db.get(username, {})
-        organization_id = user.get("organization", "fund")
+        organization_id = user.get("organization", "foundation")
         print(f"Organization ID: {organization_id}")
         
         event_id = str(uuid.uuid4())
+        # Обрабатываем роли: создаем объекты с цветами
+        roles = []
+        print(f"Event data roles: {event_data.roles}, type: {type(event_data.roles)}")
+        if event_data.roles is not None:
+            if isinstance(event_data.roles, list) and len(event_data.roles) > 0:
+                print(f"Processing {len(event_data.roles)} roles")
+                for role_name in event_data.roles:
+                    if role_name and str(role_name).strip():  # Пропускаем пустые роли
+                        roles.append({
+                            "name": str(role_name).strip(),
+                            "color": generate_random_color()
+                        })
+        print(f"Final roles: {roles}")
+        
         event = {
             "id": event_id,
             "name": event_data.name,
             "organization_id": organization_id,
             "created_at": datetime.now().isoformat(),
-            "description": event_data.description
+            "description": event_data.description,
+            "roles": roles
         }
         events_db.append(event)
+        save_events_db(events_db)  # Сохраняем в файл
         print(f"Event created: {event}")
         print(f"Total events: {len(events_db)}")
         return event
@@ -360,7 +419,7 @@ async def get_events(current_user: dict = Depends(get_current_user)):
     # Получаем organization_id из токена (для демо используем organization из users_db)
     username = current_user.get("username", "admin")
     user = users_db.get(username, {})
-    organization_id = user.get("organization", "fund")
+    organization_id = user.get("organization", "foundation")
     print(f"Getting events for user: {username}, organization: {organization_id}")
     print(f"Total events in DB: {len(events_db)}")
     
@@ -382,7 +441,7 @@ async def get_event(
     # Проверяем, что мероприятие принадлежит организации пользователя
     username = current_user.get("username", "admin")
     user = users_db.get(username, {})
-    organization_id = user.get("organization", "fund")
+    organization_id = user.get("organization", "foundation")
     
     if event.get("organization_id") != organization_id:
         raise HTTPException(status_code=403, detail="Доступ запрещен")
@@ -396,24 +455,58 @@ async def update_event(
     current_user: dict = Depends(get_current_user)
 ):
     """Обновить мероприятие"""
-    event = next((e for e in events_db if e["id"] == event_id), None)
-    if not event:
-        raise HTTPException(status_code=404, detail="Мероприятие не найдено")
-    
-    # Проверяем, что мероприятие принадлежит организации пользователя
-    username = current_user.get("username", "admin")
-    user = users_db.get(username, {})
-    organization_id = user.get("organization", "fund")
-    
-    if event.get("organization_id") != organization_id:
-        raise HTTPException(status_code=403, detail="Доступ запрещен")
-    
-    if event_data.name is not None:
-        event["name"] = event_data.name
-    if event_data.description is not None:
-        event["description"] = event_data.description
-    
-    return event
+    try:
+        print(f"=== UPDATE EVENT REQUEST ===")
+        print(f"Event ID: {event_id}")
+        print(f"Event data: {event_data}")
+        print(f"Current user: {current_user}")
+        
+        event = next((e for e in events_db if e["id"] == event_id), None)
+        if not event:
+            print(f"Event not found: {event_id}")
+            raise HTTPException(status_code=404, detail="Мероприятие не найдено")
+        
+        # Проверяем, что мероприятие принадлежит организации пользователя
+        username = current_user.get("username", "admin")
+        user = users_db.get(username, {})
+        organization_id = user.get("organization", "foundation")
+        
+        if event.get("organization_id") != organization_id:
+            print(f"Access denied: event org {event.get('organization_id')} != user org {organization_id}")
+            raise HTTPException(status_code=403, detail="Доступ запрещен")
+        
+        if event_data.name is not None:
+            event["name"] = event_data.name
+        if event_data.description is not None:
+            event["description"] = event_data.description
+        if event_data.roles is not None:
+            # Обновляем роли: сохраняем существующие цвета, добавляем новые с цветами
+            print(f"Updating roles: {event_data.roles}, type: {type(event_data.roles)}")
+            existing_roles = {r["name"]: r["color"] for r in event.get("roles", [])}
+            new_roles = []
+            if isinstance(event_data.roles, list):
+                for role_name in event_data.roles:
+                    if role_name and str(role_name).strip():
+                        role_name_clean = str(role_name).strip()
+                        # Используем существующий цвет или генерируем новый
+                        color = existing_roles.get(role_name_clean, generate_random_color())
+                        new_roles.append({
+                            "name": role_name_clean,
+                            "color": color
+                        })
+            print(f"New roles: {new_roles}")
+            event["roles"] = new_roles
+        
+        save_events_db(events_db)  # Сохраняем в файл
+        print(f"Event updated successfully: {event}")
+        return event
+    except HTTPException:
+        raise
+    except Exception as e:
+        print(f"ERROR in update_event: {e}")
+        import traceback
+        traceback.print_exc()
+        raise HTTPException(status_code=500, detail=f"Ошибка при обновлении мероприятия: {str(e)}")
 
 @app.delete("/api/events/{event_id}")
 async def delete_event(
@@ -428,22 +521,39 @@ async def delete_event(
     # Проверяем, что мероприятие принадлежит организации пользователя
     username = current_user.get("username", "admin")
     user = users_db.get(username, {})
-    organization_id = user.get("organization", "fund")
+    organization_id = user.get("organization", "foundation")
     
     if event.get("organization_id") != organization_id:
         raise HTTPException(status_code=403, detail="Доступ запрещен")
     
     events_db.remove(event)
+    save_events_db(events_db)  # Сохраняем в файл
     return {"message": "Мероприятие удалено"}
 
 # ========== УЧАСТНИКИ ==========
 @app.post("/api/participants/parse", response_model=List[Participant])
 async def parse_participants_file(
     file: UploadFile = File(...),
+    event_id: Optional[str] = Form(None),
     current_user: dict = Depends(get_current_user)
 ):
+    """Парсит файл участников и фильтрует по ролям мероприятия"""
     # В реальном приложении здесь должен быть парсинг файла
     # Для демо возвращаем пустой список
+    
+    # Если указан event_id, получаем роли мероприятия для фильтрации
+    allowed_roles = None
+    if event_id:
+        event = next((e for e in events_db if e["id"] == event_id), None)
+        if event and event.get("roles"):
+            allowed_roles = {r["name"].lower() for r in event["roles"]}
+    
+    # Здесь будет парсинг файла, но пока возвращаем пустой список
+    # В реальной реализации нужно:
+    # 1. Распарсить файл (Excel/CSV)
+    # 2. Если allowed_roles не None, отфильтровать участников по ролям
+    # 3. Вернуть только участников с разрешенными ролями
+    
     return []
 
 def replace_email_placeholders(text: str, participant: Participant, event_name: str, issue_date: Optional[str] = None) -> str:

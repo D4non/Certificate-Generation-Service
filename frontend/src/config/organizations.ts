@@ -7,8 +7,8 @@ export interface Organization {
 }
 
 export const organizations: Record<string, Organization> = {
-  fund: {
-    id: 'fund',
+  foundation: {
+    id: 'foundation',
     name: 'Фонд',
     primaryColor: '#4d008c',
     accentColor: '#4d008c',
