@@ -1,8 +1,7 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { certificatesApi, CertificateTemplate, Participant, CertificateGenerationRequest } from '../api/certificates';
 import { eventsApi, Event } from '../api/events';
-import { FileUpload } from '../components/FileUpload';
 import { ParticipantsTable } from '../components/ParticipantsTable';
 import { TemplateModal } from '../components/TemplateModal';
 import apiClient from '../api/client';
@@ -10,6 +9,7 @@ import { Download, Loader2, CheckCircle2, Trash2, Plus, X, Edit2, Upload, UserPl
 import toast from 'react-hot-toast';
 import { useLanguage, translateRole } from '../contexts/LanguageContext';
 import { useOrganization } from '../contexts/OrganizationContext';
+import * as XLSX from 'xlsx';
 
 // Компонент формы добавления участника
 const AddParticipantForm: React.FC<{ 
@@ -150,8 +150,8 @@ export const MainPage: React.FC = () => {
   const [editingTemplate, setEditingTemplate] = useState<CertificateTemplate | null>(null);
   const [templatePreviews, setTemplatePreviews] = useState<Record<string, string>>({});
   const [selectedTemplate, setSelectedTemplate] = useState<string>('');
-  const [showFileUpload, setShowFileUpload] = useState(false);
   const [showAddForm, setShowAddForm] = useState(false);
+  const fileInputRef = useRef<HTMLInputElement>(null);
 
   const orgColor = organization?.primaryColor || '#5500d8';
   const [issueDate, setIssueDate] = useState(new Date().toISOString().split('T')[0]);
@@ -221,6 +221,85 @@ export const MainPage: React.FC = () => {
     if (!eventId) return;
     setParticipants(parsedParticipants);
     localStorage.setItem(`participants_${eventId}`, JSON.stringify(parsedParticipants));
+  };
+
+  const parseFile = async (file: File) => {
+    try {
+      if (file.name.endsWith('.csv')) {
+        const text = await file.text();
+        const lines = text.split('\n').filter((line) => line.trim());
+        const headers = lines[0].split(',').map((h) => h.trim().toLowerCase());
+        
+        const participants: Participant[] = [];
+        for (let i = 1; i < lines.length; i++) {
+          const values = lines[i].split(',').map((v) => v.trim());
+          if (values.length >= 2) {
+            participants.push({
+              fio: values[0] || '',
+              email: values[1] || '',
+              role: (values[2] as Participant['role']) || 'участник',
+              place: values[3] ? parseInt(values[3]) : undefined,
+            });
+          }
+        }
+        handleFileParsed(participants);
+        toast.success(`Загружено ${participants.length} участников`);
+      } else if (file.name.endsWith('.xlsx') || file.name.endsWith('.xls')) {
+        const arrayBuffer = await file.arrayBuffer();
+        const workbook = XLSX.read(arrayBuffer, { type: 'array' });
+        const sheetName = workbook.SheetNames[0];
+        const worksheet = workbook.Sheets[sheetName];
+        const data = XLSX.utils.sheet_to_json(worksheet, { header: 1 }) as any[][];
+        
+        if (data.length < 2) {
+          throw new Error('Файл должен содержать заголовки и хотя бы одну строку данных');
+        }
+
+        const headers = data[0].map((h: any) => String(h).toLowerCase().trim());
+        const fioIndex = headers.findIndex((h) => h.includes('фио') || h.includes('fio') || h.includes('имя'));
+        const emailIndex = headers.findIndex((h) => h.includes('email') || h.includes('почта') || h.includes('mail'));
+        const roleIndex = headers.findIndex((h) => h.includes('роль') || h.includes('role'));
+        const placeIndex = headers.findIndex((h) => h.includes('место') || h.includes('place'));
+
+        if (fioIndex === -1 || emailIndex === -1) {
+          throw new Error('Файл должен содержать колонки "ФИО" и "Email"');
+        }
+
+        const participants: Participant[] = [];
+        for (let i = 1; i < data.length; i++) {
+          const row = data[i];
+          if (row && row[fioIndex] && row[emailIndex]) {
+            participants.push({
+              fio: String(row[fioIndex] || '').trim(),
+              email: String(row[emailIndex] || '').trim(),
+              role: (row[roleIndex] as Participant['role']) || 'участник',
+              place: row[placeIndex] ? parseInt(String(row[placeIndex])) : undefined,
+            });
+          }
+        }
+        handleFileParsed(participants);
+        toast.success(`Загружено ${participants.length} участников`);
+      } else {
+        throw new Error('Неподдерживаемый формат файла. Используйте CSV или XLSX');
+      }
+    } catch (error: any) {
+      toast.error(error.message || 'Ошибка при парсинге файла');
+    }
+  };
+
+  const handleFileSelect = (event: React.ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0];
+    if (file) {
+      parseFile(file);
+    }
+    // Сброс input, чтобы можно было выбрать тот же файл снова
+    if (fileInputRef.current) {
+      fileInputRef.current.value = '';
+    }
+  };
+
+  const handleUploadClick = () => {
+    fileInputRef.current?.click();
   };
 
   const handleDownloadExample = () => {
@@ -434,11 +513,15 @@ export const MainPage: React.FC = () => {
 
         {/* Кнопки загрузки и добавления */}
         <div className="flex items-center gap-4 mb-8">
+          <input
+            ref={fileInputRef}
+            type="file"
+            accept=".csv,.xlsx,.xls"
+            onChange={handleFileSelect}
+            className="hidden"
+          />
           <button
-            onClick={() => {
-              setShowFileUpload(!showFileUpload);
-              setShowAddForm(false);
-            }}
+            onClick={handleUploadClick}
             className="flex items-center px-6 py-4 text-white dark:text-gray-950 text-base font-light hover:opacity-90 dark:hover:bg-gray-100 focus:outline-none transition-all"
             style={{ backgroundColor: orgColor }}
           >
@@ -448,7 +531,6 @@ export const MainPage: React.FC = () => {
           <button
             onClick={() => {
               setShowAddForm(!showAddForm);
-              setShowFileUpload(false);
             }}
             className="flex items-center px-6 py-4 border-2 border-gray-300 dark:border-gray-600 text-base font-light text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-800 focus:outline-none transition-all"
           >
@@ -456,16 +538,6 @@ export const MainPage: React.FC = () => {
             {t('addParticipant')}
           </button>
         </div>
-
-        {/* Блок загрузки файла */}
-        {showFileUpload && (
-          <div className="mb-8">
-            <FileUpload onFileParsed={(parsedParticipants) => {
-              handleFileParsed(parsedParticipants);
-              setShowFileUpload(false);
-            }} />
-          </div>
-        )}
 
         {/* Форма добавления нового участника */}
         {showAddForm && (
