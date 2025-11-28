@@ -1,0 +1,181 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Сертификат</title>
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Montserrat:wght@300;400;500;600;700&display=swap');
+        
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+        
+        body {
+            font-family: 'Montserrat', sans-serif;
+            background: #ffffff;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            min-height: 100vh;
+            padding: 40px;
+        }
+        
+        .certificate {
+            width: 1200px;
+            height: 800px;
+            background: #ffffff;
+            border: 2px solid #e2e8f0;
+            position: relative;
+            padding: 80px;
+            display: flex;
+            flex-direction: column;
+            justify-content: space-between;
+        }
+        
+        .top-border {
+            position: absolute;
+            top: 0;
+            left: 0;
+            right: 0;
+            height: 6px;
+            background: #5500d8;
+        }
+        
+        .bottom-border {
+            position: absolute;
+            bottom: 0;
+            left: 0;
+            right: 0;
+            height: 6px;
+            background: #5500d8;
+        }
+        
+        .header {
+            text-align: center;
+            border-bottom: 1px solid #e2e8f0;
+            padding-bottom: 40px;
+            margin-bottom: 60px;
+        }
+        
+        .header h1 {
+            font-size: 42px;
+            font-weight: 300;
+            color: #5500d8;
+            letter-spacing: 8px;
+            margin-bottom: 10px;
+        }
+        
+        .header .subtitle {
+            font-size: 14px;
+            color: #94a3b8;
+            letter-spacing: 2px;
+            text-transform: uppercase;
+        }
+        
+        .content {
+            flex: 1;
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            text-align: center;
+        }
+        
+        .participant-name {
+            font-size: 56px;
+            font-weight: 300;
+            color: #1e293b;
+            margin-bottom: 30px;
+            letter-spacing: 2px;
+        }
+        
+        .role {
+            font-size: 24px;
+            color: #64748b;
+            font-weight: 400;
+            margin-bottom: 40px;
+        }
+        
+        .event-info {
+            margin-top: 40px;
+        }
+        
+        .event-label {
+            font-size: 14px;
+            color: #94a3b8;
+            text-transform: uppercase;
+            letter-spacing: 1px;
+            margin-bottom: 10px;
+        }
+        
+        .event-name {
+            font-size: 28px;
+            font-weight: 500;
+            color: #1e293b;
+        }
+        
+        .place {
+            font-size: 20px;
+            color: #5500d8;
+            margin-top: 20px;
+            font-weight: 500;
+        }
+        
+        .footer {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding-top: 40px;
+            border-top: 1px solid #e2e8f0;
+        }
+        
+        .date {
+            font-size: 14px;
+            color: #94a3b8;
+        }
+        
+        .certificate-id {
+            font-size: 11px;
+            color: #cbd5e1;
+            font-family: monospace;
+        }
+        
+        .divider {
+            width: 100px;
+            height: 1px;
+            background: #e2e8f0;
+            margin: 30px auto;
+        }
+    </style>
+</head>
+<body>
+    <div class="certificate">
+        <div class="top-border"></div>
+        <div class="bottom-border"></div>
+        
+        <div class="header">
+            <h1>СЕРТИФИКАТ</h1>
+            <div class="subtitle">Certificate of Participation</div>
+        </div>
+        
+        <div class="content">
+            <div class="participant-name">{fio}</div>
+            <div class="role">{role}</div>
+            <div class="divider"></div>
+            <div class="event-info">
+                <div class="event-label">Мероприятие</div>
+                <div class="event-name">{event_name}</div>
+                <div class="place" style="display: {place ? 'block' : 'none'};">Место: {place}</div>
+            </div>
+        </div>
+        
+        <div class="footer">
+            <div class="date">{issue_date}</div>
+            <div class="certificate-id">{certificate_id}</div>
+        </div>
+    </div>
+</body>
+</html>
+

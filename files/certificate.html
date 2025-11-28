@@ -1,0 +1,40 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Сертификат</title>
+    <style>
+        body { font-family: 'Times New Roman', serif; margin: 0; padding: 40px; background: #f4e4bc; }
+        .certificate { max-width: 800px; margin: 0 auto; background: white; padding: 60px; box-shadow: 0 0 20px rgba(0,0,0,0.3); position: relative; }
+        .border { border: 5px solid #8b4513; padding: 40px; position: relative; }
+        .border::before { content: ''; position: absolute; top: 20px; left: 20px; right: 20px; bottom: 20px; border: 3px dashed #d2b48c; }
+        h1 { text-align: center; font-size: 36px; color: #8b4513; margin: 20px 0; text-transform: uppercase; letter-spacing: 2px; }
+        .info { text-align: center; font-size: 24px; line-height: 1.4; margin: 40px 0; color: #333; }
+        .fio { font-size: 32px; font-weight: bold; color: #8b4513; margin: 20px 0; }
+        .role-place { font-size: 20px; margin: 10px 0; }
+        .date { font-style: italic; margin-top: 30px; }
+        .signature { position: absolute; bottom: 40px; right: 40px; text-align: right; }
+        @media print { body { background: white; padding: 0; } .certificate { box-shadow: none; margin: 0; } }
+    </style>
+</head>
+<body>
+    <div class="certificate">
+        <div class="border">
+            <h1>Сертификат</h1>
+            <div class="info">
+                <div class="fio">{ФИО}</div>
+                <div class="role-place">
+                    за участие в роли <strong>{роль}</strong>
+                    {место ? '(место: {место})' : ''}
+                </div>
+                <div class="date">Дата: {дата}</div>
+            </div>
+            <div class="signature">
+                <p>Организатор</p>
+                <p>___________________</p>
+            </div>
+        </div>
+    </div>
+</body>
+</html>

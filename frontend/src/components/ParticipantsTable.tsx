@@ -1,0 +1,361 @@
+import { useState } from 'react';
+import { Participant } from '../api/certificates';
+import { User, Mail, Award, Trophy, Edit2, Check, X, Trash2, ChevronLeft, ChevronRight } from 'lucide-react';
+import { useLanguage, translateRole } from '../contexts/LanguageContext';
+
+interface ParticipantsTableProps {
+  participants: Participant[];
+  onRemove?: (index: number) => void;
+  onUpdate?: (index: number, participant: Participant) => void;
+  onRemoveMultiple?: (indices: number[]) => void;
+  itemsPerPage?: number;
+}
+
+export const ParticipantsTable: React.FC<ParticipantsTableProps> = ({
+  participants,
+  onRemove,
+  onUpdate,
+  onRemoveMultiple,
+  itemsPerPage = 10,
+}) => {
+  const { t, language } = useLanguage();
+  const [editingIndex, setEditingIndex] = useState<number | null>(null);
+  const [editData, setEditData] = useState<Participant | null>(null);
+  const [selectedIndices, setSelectedIndices] = useState<Set<number>>(new Set());
+  const [selectAll, setSelectAll] = useState(false);
+  const [currentPage, setCurrentPage] = useState(1);
+
+  if (participants.length === 0) {
+    return (
+      <div className="text-center py-12 text-gray-400 dark:text-gray-500 font-light">
+        {t('noParticipants')}
+      </div>
+    );
+  }
+
+  const roleColors: Record<Participant['role'], string> = {
+    участник: 'bg-blue-100 text-blue-800 dark:bg-blue-900/30 dark:text-blue-300 border-blue-300 dark:border-blue-700',
+    докладчик: 'bg-purple-100 text-purple-800 dark:bg-purple-900/30 dark:text-purple-300 border-purple-300 dark:border-purple-700',
+    победитель: 'bg-yellow-100 text-yellow-800 dark:bg-yellow-900/30 dark:text-yellow-300 border-yellow-300 dark:border-yellow-700',
+    призер: 'bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-300 border-green-300 dark:border-green-700',
+  };
+
+  const roleStyles: Record<Participant['role'], string> = {
+    участник: roleColors.участник,
+    докладчик: roleColors.докладчик,
+    победитель: roleColors.победитель,
+    призер: roleColors.призер,
+  };
+
+  // Пагинация
+  const totalPages = Math.ceil(participants.length / itemsPerPage);
+  const startIndex = (currentPage - 1) * itemsPerPage;
+  const endIndex = startIndex + itemsPerPage;
+  const currentParticipants = participants.slice(startIndex, endIndex);
+  const currentPageIndices = currentParticipants.map((_, i) => startIndex + i);
+
+  // Обновляем выбранные индексы при смене страницы
+  const getGlobalIndex = (localIndex: number) => startIndex + localIndex;
+
+  const handleEdit = (globalIndex: number) => {
+    setEditingIndex(globalIndex);
+    setEditData({ ...participants[globalIndex] });
+  };
+
+  const handleSave = (globalIndex: number) => {
+    if (editData && onUpdate) {
+      onUpdate(globalIndex, editData);
+    }
+    setEditingIndex(null);
+    setEditData(null);
+  };
+
+  const handleCancel = () => {
+    setEditingIndex(null);
+    setEditData(null);
+  };
+
+  const handleSelectAll = () => {
+    if (selectAll) {
+      setSelectedIndices(new Set());
+      setSelectAll(false);
+    } else {
+      // Выбираем только участников на текущей странице
+      const newSelected = new Set(selectedIndices);
+      currentPageIndices.forEach(i => newSelected.add(i));
+      setSelectedIndices(newSelected);
+      setSelectAll(newSelected.size === participants.length);
+    }
+  };
+
+  const handleSelect = (globalIndex: number) => {
+    const newSelected = new Set(selectedIndices);
+    if (newSelected.has(globalIndex)) {
+      newSelected.delete(globalIndex);
+    } else {
+      newSelected.add(globalIndex);
+    }
+    setSelectedIndices(newSelected);
+    // Проверяем, выбраны ли все на текущей странице
+    const allCurrentPageSelected = currentPageIndices.every(i => newSelected.has(i));
+    setSelectAll(allCurrentPageSelected && newSelected.size === participants.length);
+  };
+
+  const handleRemoveMultiple = () => {
+    if (onRemoveMultiple && selectedIndices.size > 0) {
+      onRemoveMultiple(Array.from(selectedIndices));
+      setSelectedIndices(new Set());
+      setSelectAll(false);
+      // Переходим на предыдущую страницу, если текущая стала пустой
+      if (currentPage > 1 && currentPage > Math.ceil((participants.length - selectedIndices.size) / itemsPerPage)) {
+        setCurrentPage(currentPage - 1);
+      }
+    }
+  };
+
+  const handlePageChange = (page: number) => {
+    setCurrentPage(page);
+    setSelectAll(false);
+  };
+
+  return (
+    <div className="space-y-6">
+      {onRemoveMultiple && selectedIndices.size > 0 && (
+        <div className="flex items-center justify-between p-4 border-2 border-gray-200 dark:border-gray-700">
+          <span className="text-xs font-light text-gray-600 dark:text-gray-400 uppercase tracking-wider">
+            {t('selected')}: {selectedIndices.size}
+          </span>
+          <button
+            onClick={handleRemoveMultiple}
+            className="inline-flex items-center px-4 py-2 text-sm font-light text-gray-700 dark:text-gray-300 hover:text-gray-950 dark:hover:text-white hover:bg-gray-50 dark:hover:bg-gray-800 focus:outline-none transition-all"
+          >
+            <Trash2 className="h-4 w-4 mr-2" />
+            {t('removeSelected')}
+          </button>
+        </div>
+      )}
+
+      <div className="overflow-x-auto">
+        <table className="min-w-full">
+          <thead className="border-b-2 border-gray-200 dark:border-gray-700">
+            <tr>
+              {onRemoveMultiple && (
+                <th className="px-4 py-3 text-left">
+                  <input
+                    type="checkbox"
+                    checked={selectAll}
+                    onChange={handleSelectAll}
+                    className="h-4 w-4 text-accent focus:ring-accent border-gray-300 dark:border-gray-600 rounded"
+                  />
+                </th>
+              )}
+              <th className="px-0 py-4 text-left text-xs font-light text-gray-600 dark:text-gray-400 uppercase tracking-wider">
+                {t('fio')}
+              </th>
+              <th className="px-0 py-4 text-left text-xs font-light text-gray-600 dark:text-gray-400 uppercase tracking-wider">
+                {t('email')}
+              </th>
+              <th className="px-0 py-4 text-left text-xs font-light text-gray-600 dark:text-gray-400 uppercase tracking-wider">
+                {t('role')}
+              </th>
+              <th className="px-0 py-4 text-left text-xs font-light text-gray-600 dark:text-gray-400 uppercase tracking-wider">
+                {t('place')}
+              </th>
+              <th className="px-0 py-4 text-right text-xs font-light text-gray-600 dark:text-gray-400 uppercase tracking-wider">
+                {t('actions')}
+              </th>
+            </tr>
+          </thead>
+          <tbody className="divide-y divide-gray-200 dark:divide-gray-700">
+            {currentParticipants.map((participant, localIndex) => {
+              const globalIndex = getGlobalIndex(localIndex);
+              const isEditing = editingIndex === globalIndex;
+              const isSelected = selectedIndices.has(globalIndex);
+
+              return (
+                <tr
+                  key={globalIndex}
+                  className={`group hover:bg-gray-50/50 dark:hover:bg-gray-800/50 transition-colors ${
+                    isSelected ? 'bg-accent/5' : ''
+                  }`}
+                >
+                  {onRemoveMultiple && (
+                    <td className="px-0 py-5">
+                      <input
+                        type="checkbox"
+                        checked={isSelected}
+                        onChange={() => handleSelect(globalIndex)}
+                        className="h-4 w-4 text-accent focus:ring-accent border-gray-300 dark:border-gray-600 rounded"
+                      />
+                    </td>
+                  )}
+                  <td className="px-0 py-5 whitespace-nowrap align-top">
+                    {isEditing && editData ? (
+                      <input
+                        type="text"
+                        value={editData.fio}
+                        onChange={(e) => setEditData({ ...editData, fio: e.target.value })}
+                        className="w-full px-0 py-1 text-base border-0 border-b-2 border-gray-300 dark:border-gray-600 bg-transparent text-gray-950 dark:text-white focus:outline-none focus:border-accent transition-colors font-light"
+                      />
+                    ) : (
+                      <span className="text-base font-light text-gray-950 dark:text-white">
+                        {participant.fio}
+                      </span>
+                    )}
+                  </td>
+                  <td className="px-0 py-5 whitespace-nowrap align-top">
+                    {isEditing && editData ? (
+                      <input
+                        type="email"
+                        value={editData.email}
+                        onChange={(e) => setEditData({ ...editData, email: e.target.value })}
+                        className="w-full px-0 py-1 text-base border-0 border-b-2 border-gray-300 dark:border-gray-600 bg-transparent text-gray-950 dark:text-white focus:outline-none focus:border-accent transition-colors font-light"
+                      />
+                    ) : (
+                      <span className="text-base text-gray-600 dark:text-gray-400 font-light">
+                        {participant.email}
+                      </span>
+                    )}
+                  </td>
+                  <td className="px-0 py-5 whitespace-nowrap align-top">
+                    {isEditing && editData ? (
+                      <select
+                        value={editData.role}
+                        onChange={(e) => setEditData({ ...editData, role: e.target.value as Participant['role'] })}
+                        className="w-full px-0 py-1 text-base border-0 border-b-2 border-gray-300 dark:border-gray-600 bg-transparent text-gray-950 dark:text-white focus:outline-none focus:border-accent transition-colors font-light"
+                      >
+                        <option value="участник">{translateRole('участник', language)}</option>
+                        <option value="докладчик">{translateRole('докладчик', language)}</option>
+                        <option value="победитель">{translateRole('победитель', language)}</option>
+                        <option value="призер">{translateRole('призер', language)}</option>
+                      </select>
+                    ) : (
+                      <span
+                        className={`inline-flex px-3 py-1 text-xs font-light border ${roleStyles[participant.role]}`}
+                      >
+                        {translateRole(participant.role, language)}
+                      </span>
+                    )}
+                  </td>
+                  <td className="px-0 py-5 whitespace-nowrap align-top">
+                    {isEditing && editData ? (
+                      <input
+                        type="number"
+                        min="1"
+                        max="3"
+                        value={editData.place || ''}
+                        onChange={(e) => setEditData({ ...editData, place: e.target.value ? parseInt(e.target.value) : undefined })}
+                        className="w-20 px-0 py-1 text-base border-0 border-b-2 border-gray-300 dark:border-gray-600 bg-transparent text-gray-950 dark:text-white focus:outline-none focus:border-accent transition-colors font-light"
+                        placeholder="—"
+                      />
+                    ) : (
+                      <span className="text-base text-gray-600 dark:text-gray-400 font-light">
+                        {participant.place ? (
+                          <span className="text-gray-950 dark:text-white">{participant.place}</span>
+                        ) : (
+                          <span className="text-gray-400 dark:text-gray-500">—</span>
+                        )}
+                      </span>
+                    )}
+                  </td>
+                  <td className="px-0 py-5 whitespace-nowrap text-right">
+                    {isEditing ? (
+                      <div className="flex items-center justify-end space-x-3">
+                        <button
+                          onClick={() => handleSave(globalIndex)}
+                          className="text-gray-500 hover:text-gray-700 dark:hover:text-gray-300 transition-colors"
+                          title={t('save')}
+                        >
+                          <Check className="h-5 w-5" />
+                        </button>
+                        <button
+                          onClick={handleCancel}
+                          className="text-gray-500 hover:text-gray-700 dark:hover:text-gray-300 transition-colors"
+                          title={t('cancel')}
+                        >
+                          <X className="h-5 w-5" />
+                        </button>
+                      </div>
+                    ) : (
+                      <div className="flex items-center justify-end space-x-3 opacity-0 group-hover:opacity-100 transition-opacity">
+                        {onUpdate && (
+                          <button
+                            onClick={() => handleEdit(globalIndex)}
+                            className="text-gray-500 hover:text-gray-700 dark:hover:text-gray-300 transition-colors"
+                            title={t('edit')}
+                          >
+                            <Edit2 className="h-5 w-5" />
+                          </button>
+                        )}
+                        {onRemove && (
+                          <button
+                            onClick={() => onRemove(globalIndex)}
+                            className="text-gray-500 hover:text-gray-700 dark:hover:text-gray-300 transition-colors"
+                            title={t('delete')}
+                          >
+                            <Trash2 className="h-5 w-5" />
+                          </button>
+                        )}
+                      </div>
+                    )}
+                  </td>
+                </tr>
+              );
+            })}
+          </tbody>
+        </table>
+      </div>
+
+      {/* Пагинация */}
+      {totalPages > 1 && (
+        <div className="flex items-center justify-between border-t-2 border-gray-200 dark:border-gray-700 pt-6">
+          <div className="text-sm text-gray-600 dark:text-gray-400 font-light">
+            {t('showing')} {startIndex + 1} - {Math.min(endIndex, participants.length)} {t('of')} {participants.length}
+          </div>
+          <div className="flex items-center space-x-1">
+            <button
+              onClick={() => handlePageChange(currentPage - 1)}
+              disabled={currentPage === 1}
+              className="p-2 text-gray-500 hover:text-gray-700 dark:hover:text-gray-300 disabled:opacity-30 disabled:cursor-not-allowed transition-colors"
+            >
+              <ChevronLeft className="h-5 w-5" />
+            </button>
+            <div className="flex items-center space-x-1">
+              {Array.from({ length: totalPages }, (_, i) => i + 1).map((page) => {
+                if (
+                  page === 1 ||
+                  page === totalPages ||
+                  (page >= currentPage - 1 && page <= currentPage + 1)
+                ) {
+                  return (
+                    <button
+                      key={page}
+                      onClick={() => handlePageChange(page)}
+                      className={`px-3 py-1 text-sm font-light transition-colors ${
+                        currentPage === page
+                          ? 'text-gray-950 dark:text-white'
+                          : 'text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-300'
+                      }`}
+                    >
+                      {page}
+                    </button>
+                  );
+                } else if (page === currentPage - 2 || page === currentPage + 2) {
+                  return <span key={page} className="px-2 text-gray-400 dark:text-gray-600">...</span>;
+                }
+                return null;
+              })}
+            </div>
+            <button
+              onClick={() => handlePageChange(currentPage + 1)}
+              disabled={currentPage === totalPages}
+              className="p-2 text-gray-500 hover:text-gray-700 dark:hover:text-gray-300 disabled:opacity-30 disabled:cursor-not-allowed transition-colors"
+            >
+              <ChevronRight className="h-5 w-5" />
+            </button>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+};
